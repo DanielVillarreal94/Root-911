@@ -24,6 +24,7 @@ class UserController extends Controller
      */
     public function index()
     {
+        $role = auth()->user()->role_id == 1 ? 1 : 2;
         $attributes = ["identification", "firstname", "lastname", "username", "phone_number", "email", "state", "department_id", "name", "role_id", "role_name"];
         $data['users'] = User::leftJoin('records', 'id', 'identification')
             ->join('departments', 'id_department', 'department_id')
@@ -31,6 +32,7 @@ class UserController extends Controller
             ->select($attributes)
             ->selectRaw('count(id) as total')
             ->where('identification', '<>', 0)
+            ->where('id_role', '>', $role)
             ->groupBy($attributes)
             ->get();
         $data['departments'] = Deparment::where('id_department', '<>', 1)->get();
@@ -45,7 +47,8 @@ class UserController extends Controller
      */
     public function create()
     {
-        $roles          = Role::where('id_role', '>', 1)->get();
+        $role = auth()->user()->role_id == 1 ? 1 : 2;
+        $roles          = Role::where('id_role', '>', $role)->get();
         $departments    = Deparment::where('id_department', '>', 1)->get();
 
         $data               = new stdClass;
@@ -106,8 +109,9 @@ class UserController extends Controller
      */
     public function edit($id)
     {
+        $role = auth()->user()->role_id == 1 ? 1 : 2;
         $user           = User::find($id);
-        $roles          = Role::where('id_role', '>', 1)->get();
+        $roles          = Role::where('id_role', '>', $role)->get();
         $departments    = Deparment::where('id_department', '>', 1)->get();
 
         $data               = new stdClass;
@@ -175,7 +179,9 @@ class UserController extends Controller
             ->select($attributes)
             ->selectRaw('DATE_FORMAT(access_date, "%d/%b/%Y" ) as date')
             ->selectRaw('DATE_FORMAT(access_date, "%H:%i:%S" ) as time')
-            ->where('identification', $id)->get();
+            ->where('identification', $id)
+            ->orderBy('access_date', 'desc')
+            ->get();
         $data['identification'] = $id;
         //return $data;
         return view('user.history', $data);
@@ -183,12 +189,13 @@ class UserController extends Controller
 
     public function filters(Request $request)
     {
-        //return $request;
+        $role = auth()->user()->role_id == 1 ? 1 : 2;
         $sql = "SELECT identification, firstname, lastname, username, role_name, phone_number, email, state, count(id) as total, department_id, role_id, name FROM users 
         LEFT JOIN records ON id = identification 
         JOIN departments ON id_department = department_id
         JOIN roles ON id_role = role_id
-        WHERE identification <> 0";
+        WHERE identification <> 0
+        AND id_role > {$role}";
         
         $regex = '/^[0-9]+$/';
         $filterId = preg_match($regex, $request->filter) ? true : false;
@@ -196,7 +203,7 @@ class UserController extends Controller
         $id = $filterId ? " and identification = '{$request->filter}'": null;
         $work =!$filterId && !is_null($request->filter)? " and firstname LIKE '%{$request->filter}%' or lastname LIKE '%{$request->filter}%' or username LIKE '%{$request->filter}%'": null;
         $dep = isset($request->department_id) ? " and id_department = {$request->department_id}": null;
-        $sql.= $id. $work. $dep." GROUP BY identification, firstname, lastname, username, role_name, phone_number, email, state,  department_id,  role_id, name";
+        $sql.= $dep. $work. $id." GROUP BY identification, firstname, lastname, username, role_name, phone_number, email, state,  department_id,  role_id, name";
 
         $data['users'] = DB::select($sql);
         $data['departments'] = Deparment::where('id_department', '<>', 1)->get();
@@ -212,9 +219,11 @@ class UserController extends Controller
         INNER JOIN departments ON id_department = department_id
         WHERE identification = {$request->identification}";   
 
-        $initialDate    = $request->initial && $request->initial < now() ? " AND access_date BETWEEN '{$request->initial}'": " AND access_date BETWEEN '".now()."'" ;  
-        $finalDate      = $request->final ? " AND '{$request->final}'": " AND '".now()."'" ;
-        $sql .= $initialDate .$finalDate;
+        $now = now()->toDateString();
+
+        $initialDate    = $request->initial && $request->initial < $now ? " AND access_date BETWEEN '{$request->initial}'": " AND access_date BETWEEN '".$now."'" ;  
+        $finalDate      = $request->final ? " AND '{$request->final}'": " AND '".$now.' 23:59:59'."'" ;
+        $sql .= $initialDate .$finalDate.' ORDER by access_date desc';
         $data['history'] = DB::select($sql);
         $data['identification'] = $request->identification;
         return view('user.history', $data);

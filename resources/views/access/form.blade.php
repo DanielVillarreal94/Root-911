@@ -15,7 +15,12 @@
         @csrf
             <div class="access-body">
                 @if($action == 'access')
-                <input type="number" name="identification" placeholder="Id">
+                @if(isset($message))    
+                <div class="content" 
+                @if($message == 'Acceso permitido') style="color: #2eeb2e;" @else  style="color: red;" @endif
+                >{{$message}}</div> <br>
+                @endif
+                <input type="number" name="identification" placeholder="Id" required max="999999999999999">
                 @error('identification') <p> {{ $message }} </p> @enderror
                 @else
                 @if(session('error'))
@@ -36,6 +41,13 @@
         <form>
     </div>
 </div>
-
+<script src="https://code.jquery.com/jquery-3.2.1.js"></script>
+<script type="text/javascript">
+$(document).ready(function() {
+    setTimeout(function() {
+        $(".content").fadeOut(1500);
+    },2500);
+});
+</script>
 
 @endsection
